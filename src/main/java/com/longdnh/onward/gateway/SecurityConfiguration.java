@@ -1,17 +1,14 @@
 package com.longdnh.onward.gateway;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 
+import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.server.reactive.ServerHttpResponse;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -24,17 +21,9 @@ import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 
-import reactor.core.publisher.Mono;
 
 @Configuration(proxyBeanMethods = false)
 public class SecurityConfiguration {
-
-    /** Same JSON shape as Account's ApiError, so clients see one error contract whoever rejects them. */
-    private static final String UNAUTHENTICATED_BODY = """
-            {"code":"UNAUTHENTICATED","message":"Authentication is required"}""";
-
-    private static final String FORBIDDEN_BODY = """
-            {"code":"FORBIDDEN","message":"Access is denied"}""";
 
     @Bean
     public Clock clock() {
@@ -74,8 +63,12 @@ public class SecurityConfiguration {
 
     @Bean
     public SecurityWebFilterChain securityWebFilterChain(
-            ServerHttpSecurity http, AuthProperties properties, ReactiveJwtDecoder jwtDecoder) {
+            ServerHttpSecurity http, AuthProperties properties, ReactiveJwtDecoder jwtDecoder,
+            ReactiveStringRedisTemplate redis, RedisRateLimiter publicAuthRateLimiter,
+            RateLimitProperties rateLimitProperties) {
         String[] publicPaths = properties.publicPaths().toArray(String[]::new);
+        var sessionDenylistFilter = new SessionDenylistFilter(redis, properties);
+        var rateLimitFilter = new PublicAuthRateLimitFilter(publicAuthRateLimiter, rateLimitProperties);
 
         return http
                 // CSRF is enforced by Account on its cookie-backed endpoints; the gateway only forwards.
@@ -88,28 +81,21 @@ public class SecurityConfiguration {
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtDecoder(jwtDecoder))
-                        .authenticationEntryPoint((exchange, exception) -> {
-                            exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
-
-                            return write(exchange.getResponse(), HttpStatus.UNAUTHORIZED, UNAUTHENTICATED_BODY);
-                        })
+                        .authenticationEntryPoint((exchange, exception) ->
+                                ApiErrors.unauthenticated(exchange.getResponse()))
                         .accessDeniedHandler((exchange, exception) ->
-                                write(exchange.getResponse(), HttpStatus.FORBIDDEN, FORBIDDEN_BODY)))
+                                ApiErrors.forbidden(exchange.getResponse())))
                 .exceptionHandling(errors -> errors
                         .authenticationEntryPoint((exchange, exception) ->
-                                write(exchange.getResponse(), HttpStatus.UNAUTHORIZED, UNAUTHENTICATED_BODY))
+                                ApiErrors.unauthenticated(exchange.getResponse()))
                         .accessDeniedHandler((exchange, exception) ->
-                                write(exchange.getResponse(), HttpStatus.FORBIDDEN, FORBIDDEN_BODY)))
+                                ApiErrors.forbidden(exchange.getResponse())))
+                // Before AUTHENTICATION: the limited paths are public, so the count happens before any
+                // token work, and a flooded client costs nothing beyond one Redis call.
+                .addFilterBefore(rateLimitFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                // After AUTHORIZATION: anonymous requests to protected paths were already rejected, and the
+                // verified token is in the reactive security context for the filter to read.
+                .addFilterAfter(sessionDenylistFilter, SecurityWebFiltersOrder.AUTHORIZATION)
                 .build();
-    }
-
-    private static Mono<Void> write(ServerHttpResponse response, HttpStatus status, String body) {
-        response.setStatusCode(status);
-        response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        response.getHeaders().setCacheControl("no-store");
-
-        DataBuffer buffer = response.bufferFactory().wrap(body.getBytes(StandardCharsets.UTF_8));
-
-        return response.writeWith(Mono.just(buffer));
     }
 }
