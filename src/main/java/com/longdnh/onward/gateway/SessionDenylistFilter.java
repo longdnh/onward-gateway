@@ -70,6 +70,8 @@ public class SessionDenylistFilter implements WebFilter {
                 .multiGet(List.of(SESSION_KEY_PREFIX + sessionId, USER_KEY_PREFIX + userId))
                 .timeout(properties.denylistTimeout())
                 .map(values -> values.get(0) != null || revokedAfterIssue(values.get(1), issuedAt))
+                .doOnNext(denied -> log.debug("Denylist check sid={} user={} iat={} denied={}",
+                        sessionId, userId, issuedAt, denied))
                 .onErrorResume(exception -> {
                     log.warn("Denylist unavailable, letting the request through on the token alone: {}",
                             exception.getClass().getName());

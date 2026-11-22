@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
  * The single entry point for clients. Routes requests to the services and verifies the access token
- * once, so the services behind it only re-check the signature. See docs/microservice-decomposition.md
+ * once, so the services behind it only re-check the signature. See docs/en/microservice-decomposition.md
  * section 7 in onward-be.
  */
 @SpringBootApplication

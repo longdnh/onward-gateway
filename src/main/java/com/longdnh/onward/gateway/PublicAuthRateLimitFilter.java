@@ -10,6 +10,7 @@ import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
 
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
 /**
@@ -19,6 +20,7 @@ import reactor.core.publisher.Mono;
  * the connection address; a caller-supplied X-Forwarded-For is never trusted. If the gateway itself is
  * ever placed behind a load balancer, that is the one place to add a trusted-proxy configuration.
  */
+@Slf4j
 public class PublicAuthRateLimitFilter implements WebFilter {
 
     private static final String LIMITER_ID = "public-auth";
@@ -42,7 +44,11 @@ public class PublicAuthRateLimitFilter implements WebFilter {
             return chain.filter(exchange);
         }
 
-        return limiter.isAllowed(LIMITER_ID, path + "|" + clientAddress(exchange))
+        String key = path + "|" + clientAddress(exchange);
+
+        return limiter.isAllowed(LIMITER_ID, key)
+                .doOnNext(response -> log.debug("Rate limit key={} allowed={} remaining={}",
+                        key, response.isAllowed(), response.getHeaders().get(limiter.getRemainingHeader())))
                 .flatMap(response -> response.isAllowed()
                         ? chain.filter(exchange)
                         : ApiErrors.rateLimited(exchange.getResponse(), retryAfterSeconds(response)));
