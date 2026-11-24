@@ -1,4 +1,4 @@
-package com.longdnh.onward.gateway;
+package com.longdnh.onward.gateway.auth;
 
 import java.time.Duration;
 import java.util.List;

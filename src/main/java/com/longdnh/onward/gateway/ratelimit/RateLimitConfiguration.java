@@ -1,4 +1,4 @@
-package com.longdnh.onward.gateway;
+package com.longdnh.onward.gateway.ratelimit;
 
 import org.springframework.cloud.gateway.filter.ratelimit.RedisRateLimiter;
 import org.springframework.context.annotation.Bean;

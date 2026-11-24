@@ -1,4 +1,6 @@
-package com.longdnh.onward.gateway;
+package com.longdnh.onward.gateway.ratelimit;
+
+import com.longdnh.onward.gateway.error.ApiErrors;
 
 import java.net.InetSocketAddress;
 import java.util.Set;

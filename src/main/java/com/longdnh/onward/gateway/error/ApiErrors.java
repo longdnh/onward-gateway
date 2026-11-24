@@ -1,4 +1,4 @@
-package com.longdnh.onward.gateway;
+package com.longdnh.onward.gateway.error;
 
 import java.nio.charset.StandardCharsets;
 
@@ -11,7 +11,7 @@ import org.springframework.http.server.reactive.ServerHttpResponse;
 import reactor.core.publisher.Mono;
 
 /** Writes the same JSON shape as Account's ApiError, so clients see one error contract whoever rejects them. */
-final class ApiErrors {
+public final class ApiErrors {
 
     private static final String UNAUTHENTICATED_BODY = """
             {"code":"UNAUTHENTICATED","message":"Authentication is required"}""";
@@ -25,17 +25,17 @@ final class ApiErrors {
     private ApiErrors() {
     }
 
-    static Mono<Void> unauthenticated(ServerHttpResponse response) {
+    public static Mono<Void> unauthenticated(ServerHttpResponse response) {
         response.getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
 
         return write(response, HttpStatus.UNAUTHORIZED, UNAUTHENTICATED_BODY);
     }
 
-    static Mono<Void> forbidden(ServerHttpResponse response) {
+    public static Mono<Void> forbidden(ServerHttpResponse response) {
         return write(response, HttpStatus.FORBIDDEN, FORBIDDEN_BODY);
     }
 
-    static Mono<Void> rateLimited(ServerHttpResponse response, long retryAfterSeconds) {
+    public static Mono<Void> rateLimited(ServerHttpResponse response, long retryAfterSeconds) {
         response.getHeaders().set(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds));
 
         return write(response, HttpStatus.TOO_MANY_REQUESTS, RATE_LIMITED_BODY);

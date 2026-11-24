@@ -1,4 +1,4 @@
-package com.longdnh.onward.gateway;
+package com.longdnh.onward.gateway.ratelimit;
 
 import java.time.Duration;
 import java.util.List;

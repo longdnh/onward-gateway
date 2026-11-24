@@ -1,4 +1,6 @@
-package com.longdnh.onward.gateway;
+package com.longdnh.onward.gateway.auth;
+
+import com.longdnh.onward.gateway.error.ApiErrors;
 
 import java.time.Instant;
 import java.util.List;
